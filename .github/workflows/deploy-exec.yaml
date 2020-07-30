@@ -1,0 +1,48 @@
+name: Deploy Terraform (Local Exec)
+
+on:
+  workflow_dispatch:
+
+env:
+  TF_VAR_subscription_id: ${{ secrets.TF_VAR_subscription_id }}
+  TF_VAR_client_id: ${{ secrets.TF_VAR_client_id }}
+  TF_VAR_tenant_id: ${{ secrets.TF_VAR_tenant_id }}
+  TF_VAR_client_secret: ${{ secrets.TF_VAR_client_secret }}
+
+  TF_BACKEND_RESGRP: demo.misc
+  TF_BACKEND_STORAGE_ACCOUNT: bcmisc
+  TF_BACKEND_CONTAINER: tfstate
+  TF_BACKEND_KEY: demo.terraform.tfstate
+
+  TF_DIR: ./aci-demo-local-exec
+
+  TF_VAR_image: bencuk/nodejs-demoapp
+  TF_VAR_prefix: demotf
+
+jobs:
+  deploy-terraform:
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_version: 0.12.29
+
+    - uses: actions/checkout@v2
+      
+    - run: |
+        terraform init -input=false \
+        -backend-config="resource_group_name=$TF_BACKEND_RESGRP" \
+        -backend-config="storage_account_name=$TF_BACKEND_STORAGE_ACCOUNT" \
+        -backend-config="container_name=$TF_BACKEND_CONTAINER" \
+        -backend-config="key=$TF_BACKEND_KEY" \
+        -backend-config="subscription_id=$TF_VAR_subscription_id" \
+        -backend-config="client_id=$TF_VAR_client_id" \
+        -backend-config="client_secret=$TF_VAR_client_secret" \
+        -backend-config="tenant_id=$TF_VAR_tenant_id" 
+      working-directory: ${{ env.TF_DIR }}
+    
+    - run: terraform plan -out=tfplan -input=false
+      working-directory: ${{ env.TF_DIR }}
+    
+    - run: terraform apply -auto-approve -input=false tfplan
+      working-directory: ${{ env.TF_DIR }}

@@ -1,0 +1,127 @@
+name: Deploy Terraform (Multi)
+
+on:
+  workflow_dispatch:
+  push:
+
+env:
+  TF_VAR_subscription_id: ${{ secrets.TF_VAR_subscription_id }}
+  TF_VAR_client_id: ${{ secrets.TF_VAR_client_id }}
+  TF_VAR_tenant_id: ${{ secrets.TF_VAR_tenant_id }}
+  TF_VAR_client_secret: ${{ secrets.TF_VAR_client_secret }}
+
+  TF_BACKEND_RESGRP: demo.misc
+  TF_BACKEND_STORAGE_ACCOUNT: bcmisc
+  TF_BACKEND_CONTAINER: tfstate
+
+jobs:
+  # ================================================================================
+  # Deploy the base resources, which is a ACR
+  # ================================================================================
+  deploy-base:
+    env:
+      TF_DIR: ./base-resources
+      TF_VAR_prefix: tfbase      
+    runs-on: ubuntu-18.04
+    outputs:
+      acr_name: ${{ steps.tf-output.outputs.acr_name }}
+      acr_rg: ${{ steps.tf-output.outputs.acr_rg }}
+
+    steps:
+    - uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_version: 0.12.29
+        terraform_wrapper: false
+
+    - uses: actions/checkout@v2
+      
+    - name: Terraform init
+      working-directory: ${{ env.TF_DIR }}    
+      run: |
+        terraform init -input=false \
+        -backend-config="resource_group_name=$TF_BACKEND_RESGRP" \
+        -backend-config="storage_account_name=$TF_BACKEND_STORAGE_ACCOUNT" \
+        -backend-config="container_name=$TF_BACKEND_CONTAINER" \
+        -backend-config="subscription_id=$TF_VAR_subscription_id" \
+        -backend-config="client_id=$TF_VAR_client_id" \
+        -backend-config="client_secret=$TF_VAR_client_secret" \
+        -backend-config="tenant_id=$TF_VAR_tenant_id" 
+ 
+    - name: Terraform plan
+      working-directory: ${{ env.TF_DIR }}      
+      run: terraform plan -out=tfplan -input=false
+
+    - name: Terraform apply
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform apply -auto-approve -input=false tfplan
+
+    - name: Capture outputs from TF
+      id: tf-output
+      working-directory: ${{ env.TF_DIR }}
+      run: |
+        echo "::set-output name=acr_name::$(terraform output acr_name)"
+        echo "::set-output name=acr_rg::$(terraform output rg_name)"
+  
+  # ================================================================================
+  # Standard Docker image build and push to ACR 
+  # ================================================================================
+  build-image:   
+    needs: deploy-base
+    runs-on: ubuntu-18.04       
+    env:
+      IMAGE: ${{ needs.deploy-base.outputs.acr_name }}.azurecr.io/myapp
+      SERVER: ${{ needs.deploy-base.outputs.acr_name }}.azurecr.io
+
+    steps:
+    - name: Checkout nodejs-demoapp
+      uses: actions/checkout@master
+      with:
+        repository: benc-uk/nodejs-demoapp
+
+    - name: Docker build myapp
+      run: docker build . -f ./Dockerfile -t $IMAGE
+
+    - name: Docker login ${{ env.SERVER }}
+      run: docker login -u $TF_VAR_client_id -p $TF_VAR_client_secret $SERVER
+
+    - name: Docker push ${{ env.IMAGE }}
+      run: docker push $IMAGE        
+
+  # ================================================================================
+  # Deploy the app as ACI pulling from the ACR created in base
+  # ================================================================================
+  deploy-app:
+    needs: [ build-image, deploy-base ]
+    env:
+      TF_DIR: ./aci-app
+      TF_VAR_prefix: tfapp
+      TF_VAR_image: myapp      
+    runs-on: ubuntu-18.04
+
+    steps:
+    - uses: hashicorp/setup-terraform@v1
+      with:
+        terraform_version: 0.12.29
+        terraform_wrapper: false
+
+    - uses: actions/checkout@v2
+      
+    - name: Terraform init
+      working-directory: ${{ env.TF_DIR }}    
+      run: |
+        terraform init -input=false \
+        -backend-config="resource_group_name=$TF_BACKEND_RESGRP" \
+        -backend-config="storage_account_name=$TF_BACKEND_STORAGE_ACCOUNT" \
+        -backend-config="container_name=$TF_BACKEND_CONTAINER" \
+        -backend-config="subscription_id=$TF_VAR_subscription_id" \
+        -backend-config="client_id=$TF_VAR_client_id" \
+        -backend-config="client_secret=$TF_VAR_client_secret" \
+        -backend-config="tenant_id=$TF_VAR_tenant_id" 
+ 
+    - name: Terraform plan
+      working-directory: ${{ env.TF_DIR }}      
+      run: terraform plan -out=tfplan -input=false -var acr_name=${{ needs.deploy-base.outputs.acr_name }} -var acr_rg=${{ needs.deploy-base.outputs.acr_rg }}
+
+    - name: Terraform apply
+      working-directory: ${{ env.TF_DIR }}
+      run: terraform apply -auto-approve -input=false tfplan
