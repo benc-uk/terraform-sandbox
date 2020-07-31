@@ -9,6 +9,11 @@ provider "azurerm" {
   features {}
 }
 
+locals {
+  app_port = 3000
+  app_name = "myapp"
+}
+
 data "azurerm_container_registry" "acr" {
   name                = var.acr_name
   resource_group_name = var.acr_rg
@@ -38,7 +43,7 @@ resource "azurerm_container_group" "aci" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   ip_address_type     = "public"
-  dns_name_label      = "${var.prefix}-my-app"
+  dns_name_label      = "${var.prefix}-${local.app_name}"
   os_type             = "Linux"
 
   image_registry_credential {
@@ -48,13 +53,13 @@ resource "azurerm_container_group" "aci" {
   }
 
   container {
-    name = "my-app"
+    name = local.app_name
     image  = "${data.azurerm_container_registry.acr.login_server}/${var.image}"
     cpu    = "0.5"
     memory = "0.5"
 
     ports {
-      port     = 3000
+      port     = local.app_port
       protocol = "TCP"
     }
 

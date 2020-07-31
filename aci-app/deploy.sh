@@ -14,13 +14,12 @@ terraform init -reconfigure -backend=true \
   -backend-config="resource_group_name=$TF_BACKEND_RESGRP" \
   -backend-config="storage_account_name=$TF_BACKEND_STORAGE_ACCOUNT" \
   -backend-config="container_name=$TF_BACKEND_CONTAINER" \
-  -backend-config="key=$TF_BACKEND_KEY" \
   -backend-config="subscription_id=$TF_VAR_subscription_id" \
   -backend-config="client_id=$TF_VAR_client_id" \
   -backend-config="client_secret=$TF_VAR_client_secret" \
   -backend-config="tenant_id=$TF_VAR_tenant_id" 
 
-terraform plan -out=tfplan -var image=sdsdsss -var acr_name=tfbaseacr -var acr_rg=tfbase-rg 
+terraform plan -out=tfplan -var image=myapp -var acr_name=tfbaseacr -var acr_rg=tfbase-rg 
 
 terraform apply -auto-approve tfplan
 
