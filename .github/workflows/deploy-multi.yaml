@@ -2,17 +2,16 @@ name: Deploy Terraform (Multi)
 
 on:
   workflow_dispatch:
-  push:
 
 env:
-  TF_VAR_subscription_id: ${{ secrets.TF_VAR_subscription_id }}
-  TF_VAR_client_id: ${{ secrets.TF_VAR_client_id }}
-  TF_VAR_tenant_id: ${{ secrets.TF_VAR_tenant_id }}
-  TF_VAR_client_secret: ${{ secrets.TF_VAR_client_secret }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
 
-  TF_BACKEND_RESGRP: demo.misc
-  TF_BACKEND_STORAGE_ACCOUNT: bcmisc
-  TF_BACKEND_CONTAINER: tfstate
+  BACKEND_RESGRP: demo.misc
+  BACKEND_STORAGE_ACCOUNT: bcmisc
+  BACKEND_CONTAINER: tfstate
 
 jobs:
   # ================================================================================
@@ -20,9 +19,10 @@ jobs:
   # ================================================================================
   deploy-base:
     env:
-      TF_DIR: ./base-resources
+      TF_DIR: ./01-base-resources
       TF_VAR_prefix: tfbase      
     runs-on: ubuntu-18.04
+    # Pass step outputs as job outputs
     outputs:
       acr_name: ${{ steps.tf-output.outputs.acr_name }}
       acr_rg: ${{ steps.tf-output.outputs.acr_rg }}
@@ -35,27 +35,11 @@ jobs:
 
     - uses: actions/checkout@v2
       
-    - name: Terraform init
+    - name: Run Terraform
       working-directory: ${{ env.TF_DIR }}    
-      run: |
-        terraform init -input=false \
-        -backend-config="resource_group_name=$TF_BACKEND_RESGRP" \
-        -backend-config="storage_account_name=$TF_BACKEND_STORAGE_ACCOUNT" \
-        -backend-config="container_name=$TF_BACKEND_CONTAINER" \
-        -backend-config="subscription_id=$TF_VAR_subscription_id" \
-        -backend-config="client_id=$TF_VAR_client_id" \
-        -backend-config="client_secret=$TF_VAR_client_secret" \
-        -backend-config="tenant_id=$TF_VAR_tenant_id" 
- 
-    - name: Terraform plan
-      working-directory: ${{ env.TF_DIR }}      
-      run: terraform plan -out=tfplan -input=false
+      run: source $GITHUB_WORKSPACE/scripts/terraform.sh
 
-    - name: Terraform apply
-      working-directory: ${{ env.TF_DIR }}
-      run: terraform apply -auto-approve -input=false tfplan
-
-    - name: Capture outputs from TF
+    - name: Capture TF outputs as step outputs
       id: tf-output
       working-directory: ${{ env.TF_DIR }}
       run: |
@@ -82,7 +66,7 @@ jobs:
       run: docker build . -f ./Dockerfile -t $IMAGE
 
     - name: Docker login ${{ env.SERVER }}
-      run: docker login -u $TF_VAR_client_id -p $TF_VAR_client_secret $SERVER
+      run: docker login -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET $SERVER
 
     - name: Docker push ${{ env.IMAGE }}
       run: docker push $IMAGE        
@@ -93,9 +77,11 @@ jobs:
   deploy-app:
     needs: [ build-image, deploy-base ]
     env:
-      TF_DIR: ./aci-app
+      TF_DIR: ./02-aci-app
       TF_VAR_prefix: tfapp
-      TF_VAR_image: myapp      
+      TF_VAR_image: myapp     
+      TF_VAR_acr_name: ${{ needs.deploy-base.outputs.acr_name }}
+      TF_VAR_acr_rg: ${{ needs.deploy-base.outputs.acr_rg }}
     runs-on: ubuntu-18.04
 
     steps:
@@ -106,22 +92,6 @@ jobs:
 
     - uses: actions/checkout@v2
       
-    - name: Terraform init
+    - name: Run Terraform
       working-directory: ${{ env.TF_DIR }}    
-      run: |
-        terraform init -input=false \
-        -backend-config="resource_group_name=$TF_BACKEND_RESGRP" \
-        -backend-config="storage_account_name=$TF_BACKEND_STORAGE_ACCOUNT" \
-        -backend-config="container_name=$TF_BACKEND_CONTAINER" \
-        -backend-config="subscription_id=$TF_VAR_subscription_id" \
-        -backend-config="client_id=$TF_VAR_client_id" \
-        -backend-config="client_secret=$TF_VAR_client_secret" \
-        -backend-config="tenant_id=$TF_VAR_tenant_id" 
- 
-    - name: Terraform plan
-      working-directory: ${{ env.TF_DIR }}      
-      run: terraform plan -out=tfplan -input=false -var acr_name=${{ needs.deploy-base.outputs.acr_name }} -var acr_rg=${{ needs.deploy-base.outputs.acr_rg }}
-
-    - name: Terraform apply
-      working-directory: ${{ env.TF_DIR }}
-      run: terraform apply -auto-approve -input=false tfplan
+      run: source $GITHUB_WORKSPACE/scripts/terraform.sh

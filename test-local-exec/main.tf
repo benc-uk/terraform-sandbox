@@ -1,12 +1,14 @@
 provider "azurerm" {
   version = "~>2.20.0"
-
-  subscription_id = var.subscription_id
-  client_id       = var.client_id
-  client_secret   = var.client_secret
-  tenant_id       = var.tenant_id
-
   features {}
+}
+
+data "azurerm_client_config" "current" {
+}
+
+locals {
+  app_port = 3000
+  app_name = "myapp"
 }
 
 resource "azurerm_resource_group" "rg" {
@@ -28,15 +30,19 @@ resource "null_resource" "acr_import" {
     location            = azurerm_resource_group.rg.location
     acr_name            = azurerm_container_registry.acr.name
     image_name          = var.image
+    force_run           = "yes1"
   }
 
   depends_on = [azurerm_container_registry.acr]
 
   provisioner "local-exec" {
-    command = "az login --service-principal -u ${var.client_id} -p ${var.client_secret} --tenant ${var.tenant_id}"
-  }
-  provisioner "local-exec" {
-    command = "az acr import --name ${azurerm_container_registry.acr.name} --source docker.io/${var.image} --force && sleep 5"
+    command = <<EOF
+         docker pull ${var.image} \
+      && docker tag ${var.image} ${azurerm_container_registry.acr.login_server}/${var.image} \
+      && docker login -u ${azurerm_container_registry.acr.admin_username} -p ${azurerm_container_registry.acr.admin_password} ${azurerm_container_registry.acr.login_server} \
+      && docker push ${azurerm_container_registry.acr.login_server}/${var.image} \
+      && sleep 5
+      EOF
   }
 }
 
@@ -61,7 +67,7 @@ resource "azurerm_container_group" "aci" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   ip_address_type     = "public"
-  dns_name_label      = "${var.prefix}-my-app"
+  dns_name_label      = "${var.prefix}-${local.app_name}"
   os_type             = "Linux"
 
   image_registry_credential {
@@ -78,7 +84,7 @@ resource "azurerm_container_group" "aci" {
     memory = "0.5"
 
     ports {
-      port     = 3000
+      port     = local.app_port
       protocol = "TCP"
     }
 
