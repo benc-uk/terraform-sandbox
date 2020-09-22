@@ -39,19 +39,20 @@ case ${answer:0:1} in
     ;;
 esac
 
+PLUGIN_DIR=.
 echo -e "\n\e[34m»»» 🧱 \e[96mCopy local terraform-provider-azurerm plugin\e[0m..."
-# Just in case
+# Just in case, delete local .terraform to be on the safe side
 rm -rf .terraform
 # Copy plugin from output of `make build` to local path
-# Note. the special sub-directiry tree needed by Terraform 0.13
-mkdir -p ./registry.terraform.io/hashicorp/azurerm/99.0.0/linux_amd64
-cp ~/go/bin/terraform-provider-azurerm ./registry.terraform.io/hashicorp/azurerm/99.0.0/linux_amd64
+# Note. the special sub-directory tree needed by Terraform 0.13
+mkdir -p $PLUGIN_DIR/registry.terraform.io/hashicorp/azurerm/99.0.0/linux_amd64
+cp $(go env GOPATH)/bin/terraform-provider-azurerm $PLUGIN_DIR/registry.terraform.io/hashicorp/azurerm/99.0.0/linux_amd64
 
 # Init with new provider code as a plugin
-echo -e "\n\e[34m»»» ✨ \e[96mTerraform init\e[0m..."
-terraform init -plugin-dir=.
+echo -e "\n\e[34m»»» ✨ \e[96mTerraform init, with plugin dir=$PLUGIN_DIR\e[0m"
+terraform init -plugin-dir=$PLUGIN_DIR
 
-# Standard
+# Standard plan & apply
 echo -e "\n\e[34m»»» 📜 \e[96mTerraform plan\e[0m...\n"
 terraform plan
 echo -e "\n\e[34m»»» 🚀 \e[96mTerraform apply\e[0m...\n"
