@@ -3,3 +3,6 @@ env.tfvars
 tfplan
 .terraform/
 .env
+*.tfstate
+*.backup
+**/registry.terraform.io/**
