@@ -1,0 +1,12 @@
+provider "azurerm" {
+  version = ">=99.0.0"
+  features {}
+}
+
+resource "azurerm_security_center_contact" "example" {
+  email = "fred@benco.io"
+  phone = "+1-555-555-5555"
+
+  alert_notifications = true
+  alerts_to_admins    = true
+}

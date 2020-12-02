@@ -6,6 +6,6 @@ provider "azurerm" {
 #
 # Test azurerm_security_center_auto_provisioning
 #
-resource "azurerm_security_center_auto_provisioning" "example" {
-  auto_provision = "Off"
-}
+# resource "azurerm_security_center_auto_provisioning" "example" {
+#   auto_provision = "On"
+# }

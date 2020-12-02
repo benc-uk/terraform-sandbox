@@ -1,0 +1,90 @@
+#
+# Set up your .env file before running any of these requests
+# Set AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
+#
+
+### Get access token to call Azure ARM API
+# @name getToken 
+POST https://login.microsoftonline.com/{{$dotenv %ARM_TENANT_ID}}/oauth2/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials
+&resource=https://management.azure.com/
+&client_id={{$dotenv %ARM_CLIENT_ID}}
+&client_secret={{$dotenv %ARM_CLIENT_SECRET}}
+
+### Capture access_token from getToken response & set other globals
+@authToken = {{getToken.response.body.access_token}}
+@apiVersion = 2019-01-01-preview
+@subId = {{$dotenv %ARM_SUBSCRIPTION_ID}}
+@resGrp = testing
+@name = sandbox3
+
+
+### LIST automations for subscription
+GET https://management.azure.com/subscriptions/{{subId}}/providers/Microsoft.Security/automations?api-version={{apiVersion}}
+Authorization: Bearer {{authToken}}
+
+
+### DELETE an automation by name
+DELETE https://management.azure.com/subscriptions/{{subId}}/resourceGroups/{{resGrp}}/providers/Microsoft.Security/automations/{{name}}?api-version={{apiVersion}}
+Authorization: Bearer {{authToken}}
+
+
+### GET automation by name
+GET https://management.azure.com/subscriptions/{{subId}}/resourceGroups/{{resGrp}}/providers/Microsoft.Security/automations/{{name}}?api-version={{apiVersion}}
+Authorization: Bearer {{authToken}}
+
+
+### CREATE automation
+PUT https://management.azure.com/subscriptions/{{subId}}/resourceGroups/{{resGrp}}/providers/Microsoft.Security/automations/{{name}}?api-version={{apiVersion}}
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "location": "uksouth",
+  "properties": {
+    "isEnabled": true,
+    "scopes": [
+      {
+        "description": "Scope for /subscriptions/6a42c4e8-afcd-4155-b25a-d1f9f6371ca6",
+        "scopePath": "/subscriptions/6a42c4e8-afcd-4155-b25a-d1f9f6371ca6"
+      },
+    ],
+    "sources": [
+      {
+        "eventSource": "Alerts",
+        "ruleSets": [
+          {
+            "rules": [
+              {
+                "propertyJPath": "blahblah",
+                "propertyType": "string",
+                "expectedValue": "foo",
+                "operator": "Equals"
+              },
+              {
+                "propertyJPath": "blahblah",
+                "propertyType": "integer",
+                "expectedValue": "foo",
+                "operator": "equals"
+              }
+            ]
+          }
+        ]
+      },
+    ],
+    "actions": [
+      {
+        "workspaceResourceId": "/subscriptions/6a42c4e8-afcd-4155-b25a-d1f9f6371ca6/resourcegroups/testing/providers/microsoft.operationalinsights/workspaces/bcdev",
+        "actionType": "Workspace"
+      },
+      {
+        "workspaceResourceId": "/subscriptions/6a42c4e8-afcd-4155-b25a-d1f9f6371ca6/resourcegroups/testing/providers/microsoft.operationalinsights/workspaces/bcdev",
+        "actionType": "Workspace"
+      }      
+    ]
+  }
+}
+
+
